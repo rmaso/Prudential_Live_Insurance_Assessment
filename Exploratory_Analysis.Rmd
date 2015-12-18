@@ -1,0 +1,197 @@
+---
+title: "Prudential Live Insurance Assessment"
+author: "Ruben Maso"
+date: "15 Diciembre 2015"
+output: html_document
+---
+
+Este documento es un análisis exploratorio de los datos del concurso de Kaggle Prudential Live Insurance Assessment. El conjunto de datos puede encontrarse en [Kaggle](https://www.kaggle.com/c/prudential-life-insurance-assessment). 
+
+El conjunto de datos se compone de las siguientes variables:
+
+| Variable | Description |
+| -------- | ----------- |
+|Id  | Un identificador único asociado con la solicitud|
+|Product_Info_1-7 | Un conjunto de variables normalizadas relativas al producto solicitado |
+|Ins_Age | Edad normalizada del solicitante |
+|Ht| Altura normalizada del solicitante |
+|Wt| Peso normalizado del solicitante |
+|BMI| IMC Normalizado del solicitante |
+|Employment_Info_1-6|Un conjunto de variables normalizadas relativas a la historia de empleo del solicitante|
+|InsuredInfo_1-6|Un conjunto de variables normalizadas sobre información del solicitante|
+|Insurance_History_1-9|Un conjunto de variables normalizadas relacionados con la historia del seguro del solicitante|
+|Family_Hist_1-5|Un conjunto de variables normalizadas relativas a la historia familiar del solicitante|
+|Medical_History_1-41|Un conjunto de variables normalizadas con respecto a la historia clínica del solicitante|
+|Medical_Keyword_1-48|Un conjunto de variables ficticias relativas a la presencia/ausencia de una palabra clave médica que se asocia con la solicitud|
+|Response|Esta es la variable objetivo, una variable ordinal relativo a la decisión final asociado con la solicitud|
+
+|Tipologia de las variables | Listado |
+| ------------------------- | ------- |
+|Categoricas| Product_Info_1, Product_Info_2, Product_Info_3, Product_Info_5, Product_Info_6, Product_Info_7, Employment_Info_2, Employment_Info_3, Employment_Info_5, InsuredInfo_1, InsuredInfo_2, InsuredInfo_3, InsuredInfo_4, InsuredInfo_5, InsuredInfo_6, InsuredInfo_7, Insurance_History_1, Insurance_History_2, Insurance_History_3, Insurance_History_4, Insurance_History_7, Insurance_History_8, Insurance_History_9, Family_Hist_1, Medical_History_2, Medical_History_3, Medical_History_4, Medical_History_5, Medical_History_6, Medical_History_7, Medical_History_8, Medical_History_9, Medical_History_10, Medical_History_11, Medical_History_12, Medical_History_13, Medical_History_14, Medical_History_16, Medical_History_17, Medical_History_18, Medical_History_19, Medical_History_20, Medical_History_21, Medical_History_22, Medical_History_23, Medical_History_25, Medical_History_26, Medical_History_27, Medical_History_28, Medical_History_29, Medical_History_30, Medical_History_31, Medical_History_33, Medical_History_34, Medical_History_35, Medical_History_36, Medical_History_37, Medical_History_38, Medical_History_39, Medical_History_40, Medical_History_41 |
+|Continuas |Product_Info_4, Ins_Age, Ht, Wt, BMI, Employment_Info_1, Employment_Info_4, Employment_Info_6, Insurance_History_5, Family_Hist_2, Family_Hist_3, Family_Hist_4, Family_Hist_5|
+|Discretas | Medical_History_1, Medical_History_15, Medical_History_24, Medical_History_32 |
+| Dummy | Medical_Keyword_1-48|
+
+### Lectura de los datos
+
+Procedemos a la lectura de los datos cargando la estructura indicada en la sección anterior:
+
+```{r warning=FALSE}
+library(data.table)
+library(ggplot2)
+library(gridExtra)
+library(caret)
+colClasses=c("integer","factor","factor","factur","numeric","factor","factor","factor",
+             "numeric","numeric","numeric","numeric","numeric","factor","factor","numeric","factor","numeric",
+             "factor","factor","factor","factor","factor","factor","factor",
+             "factor","factor","factor","factor","numeric","factor","factor","factor",
+             "factor","numeric","numeric","numeric","numeric",
+             "integer","factor","factor","factor","factor","factor","factor","factor","factor","factor",
+             "factor","factor","factor","factor",
+             "integer","factor","factor","factor","factor","factor","factor","factor","factor",
+             "integer","factor","factor","factor","factor","factor","factor","factor",
+             "integer","factor","factor","factor","factor","factor","factor","factor","factor","factor",
+             "integer","integer","integer","integer","integer","integer","integer","integer","integer","integer",
+             "integer","integer","integer","integer","integer","integer","integer","integer","integer","integer",
+             "integer","integer","integer","integer","integer","integer","integer","integer","integer","integer",
+             "integer","integer","integer","integer","integer","integer","integer","integer","integer","integer",
+             "integer","integer","integer","integer","integer","integer","integer","integer","factor")
+train <- fread("../data/train.csv", colClasses=colClasses, stringsAsFactors=TRUE)
+test <- fread("../data/test.csv", colClasses = colClasses[-length(colClasses)], stringsAsFactors=TRUE)
+
+cat.var.names <- c(paste("Product_Info_", c(1:3,5:7), sep=""), paste("Employment_Info_", c(2,3,5), sep=""),
+                   paste("InsuredInfo_", 1:7, sep=""), paste("Insurance_History_", c(1:4,7:9), sep=""), 
+                   "Family_Hist_1", paste("Medical_History_", c(2:14, 16:23, 25:31, 33:41), sep=""))
+cont.var.names <- c("Product_Info_4", "Ins_Age", "Ht", "Wt", "BMI", "Employment_Info_1", "Employment_Info_4", 
+                    "Employment_Info_6", "Insurance_History_5", "Family_Hist_2", "Family_Hist_3", "Family_Hist_4", 
+                    "Family_Hist_5")
+disc.var.names <- c("Medical_History_1", "Medical_History_15", "Medical_History_24", "Medical_History_32", 
+                    paste("Medical_Keyword_", 1:48, sep=""))
+```
+
+### Exploración de datos
+Primero vamos a ver la estructura de los datos:
+
+```{r warning=FALSE}
+str(train)
+str(test)
+```
+
+
+```{r warning=FALSE}
+summary(train)
+```
+
+El conjunto de test tiene `r dim(test)[1] ` filas, mientras que el conjunto de entrenamiento tiene `r dim(train)[1]` filas. La clasificación pública se basa en el 39% de los datos y la clasificación privada se basa en el restante 61%. 
+
+### Tratamiento del los nulos
+
+El `r 100*sum(is.na(train)) / (nrow(train) * ncol(train))` % de valores perdidos (missing data). Para cada una de las variables:
+```{r warning=FALSE}
+train.md <-apply(train, 2, function(x) { sum(is.na(x)) })
+
+train.md[train.md!=0]
+```
+
+Vamos a comprobar el tipo y contenido de esas variables:
+```{r warning=FALSE}
+summary(train[,train.md!=0,with = FALSE])
+```
+
+Gráfico de los datos faltantes (solo para las variables con datos faltantes) donde la variable con más datos faltantes está arriba y la que tienes menos bajo.
+
+```{r warning=FALSE}
+plotMissingnessStr <- function(data.in, title=NULL) {
+  r <- as.data.frame(ifelse(is.na(data.in), 0, 1))
+  r <- r[,order(colMeans(is.na(data.in)))]
+  dat.tmp <- expand.grid(list(x=1:nrow(r), y=colnames(r)))
+  dat.tmp$r <- as.vector(t(r))
+
+  ggplot(dat.tmp) + geom_tile(aes(x=x, y=y, fill=factor(r))) + scale_fill_manual(values=c("black", "white"), name="Missing\n(0=Yes, 1=No)") + theme_light() + ylab("") + xlab("") + ggtitle(title)
+}
+
+plotMissingnessStr(data.in=as.data.frame(train)[,apply(train, 2, function(x) { sum(is.na(x)) > 0 })], title="Train data set")
+```
+
+### Columnas constantes
+¿Existe alguna columna constanteo con baja variabilidad? Mostramos las variables con un freqCut = 99/1
+```{r warning=FALSE}
+nzv <- nearZeroVar(train, freqCut = 99/1, saveMetrics = TRUE)
+```
+
+Existen `r sum(nzv$zeroVar)` variables constantes. Las variables con baja variabilidad son:
+
+```{r warning=FALSE}
+summary(train[, rownames(nzv)[nzv$nzv], with=FALSE])
+```
+
+### Gráficos
+
+Histogramas de las varaibles categoricas
+```{r, warning=FALSE}
+plotHist <- function(data.in, i) {
+  data <- data.frame(x=data.in[,i], Response=data.in$Response)
+  p <- ggplot(data=data, aes(x=factor(x), fill=factor(Response))) + geom_histogram() + xlab(colnames(data.in)[i]) + theme_light() + 
+    theme(axis.text.x=element_text(size=8))
+  return (p)
+}
+
+doPlots <- function(data.in, fun, ii, ncol=3) {
+  pp <- list()
+  for (i in ii) {
+    p <- fun(data.in=data.in, i=i)
+    pp <- c(pp, list(p))
+  }
+  do.call("grid.arrange", c(pp, ncol=ncol))
+}
+train.cat <- data.frame(train[ , cat.var.names, with=FALSE], Response=train$Response)
+
+doPlots(data.in=train.cat, fun=plotHist, ii=1:6, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=7:12, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=13:18, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=19:24, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=25:30, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=31:36, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=37:42, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=43:48, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=49:54, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=55:60, ncol=2)
+doPlots(data.in=train.cat, fun=plotHist, ii=61, ncol=2)
+```
+
+Funciones de densidad para las variables continuas
+```{r, warning=FALSE}
+train.cont <- data.frame(train[ , cont.var.names, with=FALSE], Response=train$Response)
+plotDensity <- function(data.in, i) {
+  data <- data.frame(x=data.in[,i], Response=data.in$Response)
+  p <- ggplot(data) + geom_density(aes(x=x, colour=factor(Response))) + 
+    geom_line(aes(x=x), stat="density", size=1, alpha=1.0) +
+    xlab(colnames(data.in)[i]) + theme_light()
+  return (p)
+}
+
+doPlots(data.in=train.cont, fun=plotDensity, ii=1:4, ncol=2)
+doPlots(data.in=train.cont, fun=plotDensity, ii=5:8, ncol=2)
+doPlots(data.in=train.cont, fun=plotDensity, ii=9:12, ncol=2)
+doPlots(data.in=train.cont, fun=plotDensity, ii=13, ncol=2)
+```
+
+Boxplots para las variables continuas dependiente de Response
+```{r, warning=FALSE}
+plotBox <- function(data.in, i) {
+  data <- data.frame(y=data.in[,i], Response=data.in$Response)
+  p <- ggplot(data, aes(x=factor(Response), y=y)) + geom_boxplot() + ylab(colnames(data.in)[i]) + theme_light()
+  return (p)
+}
+
+doPlots(data.in=train.cont, fun=plotBox, ii=1:4, ncol=2)
+doPlots(data.in=train.cont, fun=plotBox, ii=5:8, ncol=2)
+doPlots(data.in=train.cont, fun=plotBox, ii=9:12, ncol=2)
+doPlots(data.in=train.cont, fun=plotBox, ii=13, ncol=2)
+```
+
+Vamos a ver la variable respuesta
+
+```{r, warning=FALSE}
+ggplot(train) + geom_histogram(aes(factor(Response))) + xlab("Response") + theme_light()
+```
