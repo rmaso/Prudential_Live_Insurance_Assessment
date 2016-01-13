@@ -3,16 +3,21 @@ library(xgboost)
 library(randomForest)
 library(party)
 
+load('varImp.RData')
+
 basicTC <- trainControl(method = "cv", 
                          number = 2,
                          verboseIter = TRUE)
 
 
 executeModel <- function(x, y, method, ...){
-  model <- train(x, y, 
-                   method = method, 
-                   ...)
-  writeModel(model, method)
+  model <- train(x, 
+                 y, 
+                 method = method, 
+                 preProcess = c("zv"),
+                 ...)
+  
+  writeModel(model, method, 'model')
   model
 }
 
@@ -43,14 +48,37 @@ models.rFerns <- function(x, y){
   model
 }
 
-models.general <- function(x, y, method){
+# models.general <- function(x, y, method){
+models.general <- function(training, testing, method){
+  x <- subset(training, select = rownames(importance))
   x <- levelsMakeNames(x)
+  y <- training$Response
   levels(y) <- make.names(levels(y))
 
   model <- executeModel(x, y,
                         method = method,
                         trControl = basicTC)
-  model
+  
+  confMatrix <- predict.general(model = model$finalModel, 
+                       method=method,
+                       x=subset(testing, select = rownames(importance)), 
+                       y=testing$Response)
+  
+  list(model=model, confMatrix = confMatrix)
+}
+
+predict.general <- function(model, x, y, method, ...){
+  x <- levelsMakeNames(x)
+  levels(y) <- make.names(levels(y))
+  
+  pred <- predict(model, newdata = x, ...)
+  if(is.data.frame(pred)){
+    pred <- pred$class
+  }
+  cm <- confusionMatrix(as.character(pred), as.character(y))
+  
+  writeModel(cm, method, 'confMatrix')
+  cm
 }
 
 models.bag <- function(x, y){

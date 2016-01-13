@@ -36,21 +36,26 @@ source('./grouped.classification.R')
 source('./utils.R')
 sum(is.na(training))
 training[is.na(training)] <- 0
+sum(is.na(testing))
+testing[is.na(testing)] <- 0
 
+
+models <- list()
+
+models[[length(models)+1]] <- models.general(training, testing, method = 'AdaBag')
+models[[length(models)+1]] <- models.general(training, testing, method = 'bagEarth') # Not Working
+models[[length(models)+1]] <- models.general(training, testing, method = 'treebag')
+models[[length(models)+1]] <- models.general(training, testing, method = 'bagFDA')
+models[[length(models)+1]] <- models.general(training, testing, method = 'lda')
+models[[length(models)+1]] <- models.general(training, testing, method = 'nb')
+models[[length(models)+1]] <- models.general(training, testing, method = 'rpart')
+
+
+models[[length(models)+1]] <- models.rf(subset(training[ , !levelsMoreThan(training, 53), with=FALSE], select=-Response), training$Response)
+models[[length(models)+1]] <- models.rFerns(subset(training[ , !levelsMoreThan(training, 30), with=FALSE], select=-Response), training$Response)
 
 mb <- models.bag(subset(training, select=-Response), training$Response)
 
-models <- list()
-models[[length(models)+1]] <- models.rf(subset(training[ , !levelsMoreThan(training, 53), with=FALSE], select=-Response), training$Response)
-models[[length(models)+1]] <- models.rFerns(subset(training[ , !levelsMoreThan(training, 30), with=FALSE], select=-Response), training$Response)
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'AdaBag')
 # models[[length(models)+1]] <- models.general(subset(training[ , !levelsMoreThan(training, 30), with=FALSE], select=-Response), training$Response, method = 'awtan')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'bagFDA')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'rpart')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'bagEarth')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'treebag')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'bagFDA')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'lda')
-models[[length(models)+1]] <- models.general(subset(training, select=-Response), training$Response, method = 'nb')
 
 xgb <- models.xgb(subset(training, select=-Response), training$Response)
