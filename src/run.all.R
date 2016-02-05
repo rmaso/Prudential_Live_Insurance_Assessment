@@ -3,7 +3,7 @@ library(caret)
 
 ## TODO: Remove to publish
 setwd('Documents/Kaggle/Prudential_Live_Insurance_Assessment/src/')
-DEBUG = T
+DEBUG = F
 
 colClasses=c("integer","factor","factor","factur","numeric","factor","factor","factor",
              "numeric","numeric","numeric","numeric","numeric","factor","factor","numeric","factor","numeric",
@@ -43,6 +43,17 @@ sum(is.na(training))
 training[is.na(training)] <- 0
 sum(is.na(testing))
 testing[is.na(testing)] <- 0
+sum(is.na(test))
+test[is.na(test)] <- 0
+
+######### Models Variables ###########
+
+if(file.exists('cuts.RData')){
+  load('cuts.RData')
+}else{
+  cuts <- lapply(subset(training, select = rownames(importance)), discretizeVars)
+  save(cuts, file='cuts.RData')  
+}
 
 
 models <- list()
@@ -198,6 +209,141 @@ models[[length(models)+1]] <- models.general(training, testing,
 
 
 
+predTrainAll <- predict.all.models(training)
+predTrainAll <- as.data.frame(lapply(predTrainAll, factor, levels=c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8")))
+
+
+predTestingAll <- predict.all.models(testing)
+predTestingAll <- as.data.frame(lapply(predTestingAll, factor, levels=c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8")))
+
+model <- train(predTrainAll, training$Response, method = "rf",
+               trControl = trainControl(method = "cv", 
+                                        number = 10,
+                                        verboseIter = TRUE))
+
+pred <- predict(model$finalModel, newdata=predTestingAll, type="class")
+confusionMatrix(as.character(pred), as.character(testing$Response))
+
+
+x <- as.matrix(data.frame(lapply(predTrainAll,as.numeric)))
+model <- train(x, training$Response, method = "svmLinear",
+               trControl = trainControl(method = "cv", 
+                                        number = 10,
+                                        verboseIter = TRUE))
+
+x <- as.matrix(data.frame(lapply(predTestingAll,as.numeric)))
+pred <- predict(model$finalModel, newdata=x, type="response")
+confusionMatrix(as.character(pred), as.character(testing$Response))
+
+modelNoResume <- train(predTrainAll, training$Response, 
+                                     method = "nnet",
+                                     trControl = trainControl(method = "cv", 
+                                                              number = 3,
+                                                              verboseIter = TRUE),
+                                    
+                                     maxit = 1000)
+
+pred <- predict(modelNoResume$finalModel, newdata=predTestingAll, type="class")
+confusionMatrix(as.character(pred), as.character(testing$Response))
+
+
+# predAllTrain <- predict.all.models(training)
+library(Matrix)
+resumeMatrix <- t(apply( as.matrix(predTrainAll), 1, function (x){
+  table(factor(x, c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"))) 
+}))
+
+modelResume <- train(resumeMatrix, training$Response, 
+                      method = "nnet", 
+                      preProcess = NULL,
+                      maxit = 1000,
+                      trControl = trainControl(method = 'cv',
+                                               number = 3,
+                                               verboseIter = TRUE)
+                      )
+
+
+resumeMatrixTesting <- t(apply( as.matrix(predTestingAll), 1, function (x){
+  table(factor(x, c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"))) 
+}))
+
+pred <- predict(model$finalModel, newdata=resumeMatrixTesting, type="class")
+confusionMatrix(as.character(pred), as.character(testing$Response))
+
+save(modelNoResume, modelResume, file="finalModels.RData")
+
+
+# Corregir el unico caso donde Medical_History_33 == 2
+test$Medical_History_33[test$Medical_History_33 == 2] <- 3
+test$Medical_History_33 <- factor(test$Medical_History_33)
+
+testModif <- as.data.frame(sapply(names(test)[2:length(names(test))], function(x){
+  tmp <- as.data.frame(training[,x,with=FALSE])
+  colnames(tmp) <- c("col")
+  tmp2 <- as.data.frame(test[,x, with=FALSE])
+  if(is.factor(tmp$col)){
+    colnames(tmp2) <- c("col")
+    tmp2 <- factor(tmp2$col, levels=levels(tmp$col))
+  }
+  tmp2
+}))
+
+
+predTestAll <- predict.all.models(testModif)
+predTestAll <- as.data.frame(lapply(predTestAll, factor, levels=c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8")))
+
+
+
+predNoResume <- predict(modelNoResume$finalModel, newdata=predTestAll, type="class")
+
+resumeMatrixTest <- t(apply( as.matrix(predTestAll), 1, function (x){
+  table(factor(x, c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8"))) 
+}))
+
+
+predResume <- predict(modelResume$finalModel, newdata=resumeMatrixTest, type="class")
+
+write.submission( data.frame(Id = test$Id, Response = predNoResume), "NoResume")
+write.submission( data.frame(Id = test$Id, Response = predResume), "Resume")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Linear Discriminant Analysis  lda	Classification	MASS	None
 # Linear Discriminant Analysis	lda2	Classification	MASS	dimen
 # Least Squares Support Vector Machine	lssvmLinear	Classification	kernlab	None
@@ -222,7 +368,9 @@ models[[length(models)+1]] <- models.general(training, testing,
 
 
 
-
+basicTC <- trainControl(method = "cv", 
+                        number = 2,
+                        verboseIter = TRUE)
 
 
 models[[length(models)+1]] <- models.general(training, testing, method = 'bagEarth') # Not Working

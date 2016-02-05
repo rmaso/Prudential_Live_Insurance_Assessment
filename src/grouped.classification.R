@@ -12,7 +12,10 @@ library(ipred)
 library(plyr)
 library(e1071)
 library(RWeka)
-
+library(caTools)
+library(earth)
+library(mda)
+library(rFerns)
 load('varImp.RData')
 ## try http:// if https:// URLs are not supported
 #source("https://bioconductor.org/biocLite.R")
@@ -114,7 +117,7 @@ predict.all.models <- function(testing){
   fileNameList <- paste("../models/", dir("../models/", pattern = "^model"), sep="")
   dataList <- lapply(fileNameList, predict.testing, testing=testing)
   totalData <- do.call("cbind", dataList)
-  totalData
+  as.data.frame(totalData)
 }
 
 predict.testing <- function(modelFile, testing, discretize = FALSE){
@@ -133,11 +136,12 @@ predict.testing <- function(modelFile, testing, discretize = FALSE){
     x <- as.matrix(data.frame(lapply(x,as.numeric)))
   }
   
-  pred <- predict(model$finalModel, newdata=x, type=ifelse(grepl("svm", method), "response", "class"))
+  pred <- predict(model$finalModel, x, type=ifelse(grepl("svm", method), "response", "class"))
   if(is.list(pred)){
     pred <- pred$class
   }
-  as.character(pred)
+  pred <- as.character(pred)
+  pred
   
 }
 

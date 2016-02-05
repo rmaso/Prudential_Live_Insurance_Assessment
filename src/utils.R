@@ -74,3 +74,30 @@ writeModel <- function(model, id, pref){
   save(model, file = submit.path)
   model.number
 }
+
+write.submission <- function(pred, id){
+  # Writes a valid submission to paths$submit.
+  #
+  # args:
+  #  pred - a data frame with predictions in the Weekly_Sales field
+  #
+  # returns:
+  #  the submission number used
+  subs <- dir(paths$submit)
+  subs <- grep(paste('submission_',id,'_','[0-9]+(.csv)(.zip|.gz)?', sep=""), subs, value=TRUE)
+  nums <- gsub(paste('submission_',id,'_',sep=""),'', gsub('(.csv)(.zip|.gz)?','', subs))
+  if(length(nums) == 0){
+    submission.number <- 1
+  }else{
+    submission.number <- max(as.numeric(nums)) + 1
+  }
+  submit.path = paste0(paths$submit, 
+                       'submission_',
+                       id,
+                       '_',
+                       submission.number,
+                       '.csv')
+  print(paste('Writing to:', submit.path))
+  write.csv(pred, file = submit.path, quote=FALSE, row.names=FALSE)
+  submission.number
+}
