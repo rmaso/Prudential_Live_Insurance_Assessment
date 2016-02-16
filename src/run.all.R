@@ -332,9 +332,22 @@ write.submission( data.frame(Id = test$Id, Response = predResume), "Resume")
 
 
 
+sum(is.na(train))
+train[is.na(train)] <- -1
 
+nnetModel <- train(subset(train, select = -c(Id, Response)), train$Response, 
+                     method = "nnet", 
+                     preProcess = c("center", "scale", "pca"),
+                     maxit = 1000,
+                     MaxNWts = 10000,
+                     trControl = trainControl(method = 'cv',
+                                              number = 2,
+                                              verboseIter = TRUE),
+                     tuneGrid = expand.grid(size = (1:5)*2, 
+                                            decay = c(0e+00, 0e-04, 0e-01, 0e-1))
+)
 
-
+predict(nnetModel, subset(test, select = -c(Id)), type="prob")
 
 
 
